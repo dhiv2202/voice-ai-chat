@@ -2,3 +2,4 @@ flask
 openai==0.28
 requests
 gunicorn
+# force rebuild again
