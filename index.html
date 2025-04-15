@@ -1,108 +1,120 @@
-<script>
-let stream = null;
-let mediaRecorder = null;
-let audioChunks = [];
-let audioContext = null;
-let analyser = null;
-let silenceTimer = null;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Voice AI Chat</title>
+</head>
+<body>
+  <h1>🎙️ Talk to Your AI</h1>
+  <button onclick="startRecording()">Speak</button>
+  <audio id="responseAudio"></audio>
 
-async function startRecording() {
-  console.log("🎧 Listening...");
+  <script>
+    let stream = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let audioContext = null;
+    let analyser = null;
+    let silenceTimer = null;
 
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
-    audioChunks = [];
+    async function startRecording() {
+      console.log("🎧 Listening...");
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
 
-    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
 
-    mediaRecorder.onstop = async () => {
-      console.log("📤 Sending to backend...");
-      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-      const formData = new FormData();
-      formData.append("audio", audioBlob, "recording.webm");
+        mediaRecorder.onstop = async () => {
+          console.log("📤 Sending to backend...");
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          const formData = new FormData();
+          formData.append("audio", audioBlob, "recording.webm");
 
-      const response = await fetch("/transcribe", {
-        method: "POST",
-        body: formData
-      });
+          const response = await fetch("/transcribe", {
+            method: "POST",
+            body: formData
+          });
 
-      const audio = document.getElementById("responseAudio");
-      const audioBlobResp = await response.blob();
-      audio.src = URL.createObjectURL(audioBlobResp);
+          const audio = document.getElementById("responseAudio");
+          const audioBlobResp = await response.blob();
+          audio.src = URL.createObjectURL(audioBlobResp);
 
-      audio.onended = () => {
-        console.log("🔁 AI done speaking — restarting mic...");
-        cleanup();
-        startRecording(); // 🔁 loop begins again
+          audio.onended = () => {
+            console.log("🔁 AI done speaking — restarting mic...");
+            cleanup();
+            startRecording(); // 🔁 loop begins again
+          };
+
+          audio.play();
+        };
+
+        mediaRecorder.start();
+        monitorSilence();
+
+      } catch (err) {
+        console.error("Mic access failed:", err);
+      }
+    }
+
+    function monitorSilence() {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+
+      const data = new Uint8Array(analyser.fftSize);
+
+      const check = () => {
+        analyser.getByteTimeDomainData(data);
+        let max = 0;
+        for (let i = 0; i < data.length; i++) {
+          const deviation = Math.abs(data[i] - 128);
+          if (deviation > max) max = deviation;
+        }
+
+        if (max < 10) {
+          if (!silenceTimer) {
+            silenceTimer = setTimeout(() => {
+              stopRecording();
+            }, 1000); // stop after 1s of silence
+          }
+        } else {
+          clearTimeout(silenceTimer);
+          silenceTimer = null;
+        }
+
+        requestAnimationFrame(check);
       };
 
-      audio.play();
-    };
-
-    mediaRecorder.start();
-    monitorSilence();
-
-  } catch (err) {
-    console.error("Mic access failed:", err);
-  }
-}
-
-function monitorSilence() {
-  audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  const source = audioContext.createMediaStreamSource(stream);
-  analyser = audioContext.createAnalyser();
-  analyser.fftSize = 2048;
-  source.connect(analyser);
-
-  const data = new Uint8Array(analyser.fftSize);
-
-  const check = () => {
-    analyser.getByteTimeDomainData(data);
-    let max = 0;
-    for (let i = 0; i < data.length; i++) {
-      const deviation = Math.abs(data[i] - 128);
-      if (deviation > max) max = deviation;
+      check();
     }
 
-    if (max < 10) {
-      if (!silenceTimer) {
-        silenceTimer = setTimeout(() => {
-          stopRecording();
-        }, 1000); // stop after 1s of silence
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        console.log("🛑 Stopping recording...");
+        mediaRecorder.stop();
       }
-    } else {
-      clearTimeout(silenceTimer);
+      if (audioContext) {
+        audioContext.close();
+      }
+    }
+
+    function cleanup() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+      }
+      mediaRecorder = null;
+      analyser = null;
       silenceTimer = null;
     }
-
-    requestAnimationFrame(check);
-  };
-
-  check();
-}
-
-function stopRecording() {
-  if (mediaRecorder && mediaRecorder.state !== "inactive") {
-    console.log("🛑 Stopping recording...");
-    mediaRecorder.stop();
-  }
-  if (audioContext) {
-    audioContext.close();
-  }
-}
-
-function cleanup() {
-  if (stream) {
-    stream.getTracks().forEach(track => track.stop());
-    stream = null;
-  }
-  if (audioContext) {
-    audioContext.close();
-    audioContext = null;
-  }
-  mediaRecorder = null;
-  analyser = null;
-  silenceTimer = null;
-}
-</script>
+  </script>
+</body>
+</html>
