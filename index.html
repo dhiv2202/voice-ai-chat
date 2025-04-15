@@ -5,48 +5,50 @@ let silenceTimer;
 let audioContext;
 let analyser;
 let source;
+let stream;
 
 async function startRecording() {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  console.log("🎧 Listening...");
+
+  stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   audioChunks = [];
 
   mediaRecorder = new MediaRecorder(stream);
   mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
 
   mediaRecorder.onstop = async () => {
-  const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-  const formData = new FormData();
-  formData.append("audio", audioBlob, "recording.webm");
+    console.log("📤 Sending audio to backend...");
+    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+    const formData = new FormData();
+    formData.append("audio", audioBlob, "recording.webm");
 
-  console.log("🎤 Sending audio to backend...");
+    const response = await fetch("/transcribe", {
+      method: "POST",
+      body: formData,
+    });
 
-  const response = await fetch("/transcribe", {
-    method: "POST",
-    body: formData,
-  });
+    const audio = document.getElementById("responseAudio");
+    const audioBlobResp = await response.blob();
+    audio.src = URL.createObjectURL(audioBlobResp);
 
-  const audio = document.getElementById("responseAudio");
-  const audioBlobResp = await response.blob();
-  audio.src = URL.createObjectURL(audioBlobResp);
+    audio.onended = () => {
+      console.log("🔁 AI done speaking — restarting listener...");
+      stopStream(); // close previous stream cleanly
+      startRecording(); // start new turn
+    };
 
-  audio.onended = () => {
-    console.log("🔁 AI finished speaking, starting to listen again...");
-    startRecording(); // 🔁 start listening again automatically
+    audio.play();
   };
 
-  audio.play();
-};
-
-
-
   mediaRecorder.start();
-  monitorSilence(stream);
+  monitorSilence();
 }
 
-function monitorSilence(stream) {
+function monitorSilence() {
   audioContext = new (window.AudioContext || window.webkitAudioContext)();
   source = audioContext.createMediaStreamSource(stream);
   analyser = audioContext.createAnalyser();
+  analyser.fftSize = 2048;
   source.connect(analyser);
   const data = new Uint8Array(analyser.fftSize);
 
@@ -62,7 +64,7 @@ function monitorSilence(stream) {
       if (!silenceTimer) {
         silenceTimer = setTimeout(() => {
           stopRecording();
-        }, 1000); // 1 second of silence = stop
+        }, 1000); // stop after 1s silence
       }
     } else {
       clearTimeout(silenceTimer);
@@ -77,8 +79,15 @@ function monitorSilence(stream) {
 
 function stopRecording() {
   if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    console.log("🛑 Stopping recording...");
     mediaRecorder.stop();
     if (audioContext) audioContext.close();
+  }
+}
+
+function stopStream() {
+  if (stream) {
+    stream.getTracks().forEach((track) => track.stop());
   }
 }
 </script>
