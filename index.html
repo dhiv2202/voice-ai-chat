@@ -1,45 +1,51 @@
 <script>
-let stream;
-let mediaRecorder;
+let stream = null;
+let mediaRecorder = null;
 let audioChunks = [];
-let audioContext;
-let analyser;
-let silenceTimer;
+let audioContext = null;
+let analyser = null;
+let silenceTimer = null;
 
 async function startRecording() {
   console.log("🎧 Listening...");
-  stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  audioChunks = [];
 
-  mediaRecorder = new MediaRecorder(stream);
-  mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
 
-  mediaRecorder.onstop = async () => {
-    console.log("📤 Sending audio to backend...");
-    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-    const formData = new FormData();
-    formData.append("audio", audioBlob, "recording.webm");
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
 
-    const response = await fetch("/transcribe", {
-      method: "POST",
-      body: formData,
-    });
+    mediaRecorder.onstop = async () => {
+      console.log("📤 Sending to backend...");
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      const formData = new FormData();
+      formData.append("audio", audioBlob, "recording.webm");
 
-    const audio = document.getElementById("responseAudio");
-    const audioBlobResp = await response.blob();
-    audio.src = URL.createObjectURL(audioBlobResp);
+      const response = await fetch("/transcribe", {
+        method: "POST",
+        body: formData
+      });
 
-    audio.onended = () => {
-      console.log("🔁 AI done speaking — starting next round...");
-      cleanup(); // full cleanup before restarting
-      startRecording();
+      const audio = document.getElementById("responseAudio");
+      const audioBlobResp = await response.blob();
+      audio.src = URL.createObjectURL(audioBlobResp);
+
+      audio.onended = () => {
+        console.log("🔁 AI done speaking — restarting mic...");
+        cleanup();
+        startRecording(); // 🔁 loop begins again
+      };
+
+      audio.play();
     };
 
-    audio.play();
-  };
+    mediaRecorder.start();
+    monitorSilence();
 
-  mediaRecorder.start();
-  monitorSilence();
+  } catch (err) {
+    console.error("Mic access failed:", err);
+  }
 }
 
 function monitorSilence() {
@@ -51,7 +57,7 @@ function monitorSilence() {
 
   const data = new Uint8Array(analyser.fftSize);
 
-  const checkSilence = () => {
+  const check = () => {
     analyser.getByteTimeDomainData(data);
     let max = 0;
     for (let i = 0; i < data.length; i++) {
@@ -70,10 +76,10 @@ function monitorSilence() {
       silenceTimer = null;
     }
 
-    requestAnimationFrame(checkSilence);
+    requestAnimationFrame(check);
   };
 
-  checkSilence();
+  check();
 }
 
 function stopRecording() {
@@ -83,3 +89,20 @@ function stopRecording() {
   }
   if (audioContext) {
     audioContext.close();
+  }
+}
+
+function cleanup() {
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
+  if (audioContext) {
+    audioContext.close();
+    audioContext = null;
+  }
+  mediaRecorder = null;
+  analyser = null;
+  silenceTimer = null;
+}
+</script>
