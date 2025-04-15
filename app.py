@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, render_template
 import openai
 import requests
 import os
@@ -11,7 +11,7 @@ ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 
 @app.route("/")
 def index():
-    return "Voice AI backend is running."
+    return render_template("index.html")
 
 @app.route("/transcribe", methods=["POST"])
 def transcribe_audio():
