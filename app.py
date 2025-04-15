@@ -41,7 +41,7 @@ def transcribe_audio():
             "Content-Type": "application/json"
         }
 
-        voice_id = "Rachel"
+        voice_id = "IKne3meq5aSn9XLyUdCD"
         tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
 
         tts_response = requests.post(tts_url, headers=headers, json={
