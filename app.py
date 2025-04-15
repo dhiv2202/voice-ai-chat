@@ -16,7 +16,16 @@ def index():
 @app.route("/transcribe", methods=["POST"])
 def transcribe_audio():
     audio_file = request.files["audio"]
-    transcript = openai.Audio.transcribe("whisper-1", audio_file)
+audio_bytes = audio_file.read()
+
+# Save to temporary file with .webm extension
+with open("temp_audio.webm", "wb") as f:
+    f.write(audio_bytes)
+
+# Transcribe the temp file
+with open("temp_audio.webm", "rb") as f:
+    transcript = openai.Audio.transcribe("whisper-1", f)
+
     
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
