@@ -1,15 +1,13 @@
 <script>
+let stream;
 let mediaRecorder;
 let audioChunks = [];
-let silenceTimer;
 let audioContext;
 let analyser;
-let source;
-let stream;
+let silenceTimer;
 
 async function startRecording() {
   console.log("🎧 Listening...");
-
   stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   audioChunks = [];
 
@@ -32,9 +30,9 @@ async function startRecording() {
     audio.src = URL.createObjectURL(audioBlobResp);
 
     audio.onended = () => {
-      console.log("🔁 AI done speaking — restarting listener...");
-      stopStream(); // close previous stream cleanly
-      startRecording(); // start new turn
+      console.log("🔁 AI done speaking — starting next round...");
+      cleanup(); // full cleanup before restarting
+      startRecording();
     };
 
     audio.play();
@@ -46,10 +44,11 @@ async function startRecording() {
 
 function monitorSilence() {
   audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  source = audioContext.createMediaStreamSource(stream);
+  const source = audioContext.createMediaStreamSource(stream);
   analyser = audioContext.createAnalyser();
   analyser.fftSize = 2048;
   source.connect(analyser);
+
   const data = new Uint8Array(analyser.fftSize);
 
   const checkSilence = () => {
@@ -64,7 +63,7 @@ function monitorSilence() {
       if (!silenceTimer) {
         silenceTimer = setTimeout(() => {
           stopRecording();
-        }, 1000); // stop after 1s silence
+        }, 1000); // stop after 1s of silence
       }
     } else {
       clearTimeout(silenceTimer);
@@ -81,13 +80,6 @@ function stopRecording() {
   if (mediaRecorder && mediaRecorder.state !== "inactive") {
     console.log("🛑 Stopping recording...");
     mediaRecorder.stop();
-    if (audioContext) audioContext.close();
   }
-}
-
-function stopStream() {
-  if (stream) {
-    stream.getTracks().forEach((track) => track.stop());
-  }
-}
-</script>
+  if (audioContext) {
+    audioContext.close();
