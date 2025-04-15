@@ -29,7 +29,7 @@ def transcribe_audio():
         "xi-api-key": ELEVENLABS_API_KEY,
         "Content-Type": "application/json"
     }
-    voice_id = "Rachel"  # You can change this to another voice ID
+    voice_id = "Rachel"  # You can change this to another voice ID from your ElevenLabs dashboard
     tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
 
     tts_response = requests.post(tts_url, headers=headers, json={
