@@ -18,6 +18,8 @@ async function startRecording() {
   const formData = new FormData();
   formData.append("audio", audioBlob, "recording.webm");
 
+  console.log("🎤 Sending audio to backend...");
+
   const response = await fetch("/transcribe", {
     method: "POST",
     body: formData,
@@ -28,11 +30,13 @@ async function startRecording() {
   audio.src = URL.createObjectURL(audioBlobResp);
 
   audio.onended = () => {
-    startRecording(); // 🔁 automatically listen again
+    console.log("🔁 AI finished speaking, starting to listen again...");
+    startRecording(); // 🔁 start listening again automatically
   };
 
   audio.play();
 };
+
 
 
   mediaRecorder.start();
