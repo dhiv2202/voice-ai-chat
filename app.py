@@ -30,9 +30,13 @@ def transcribe_audio():
         print(f"🔹 Transcription: {transcript['text']}")
 
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": transcript["text"]}]
-        )
+    model="gpt-3.5-turbo",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant. Always respond in English, no matter what language the user speaks."},
+        {"role": "user", "content": transcript["text"]}
+    ]
+)
+
         reply_text = response["choices"][0]["message"]["content"]
         print(f"🔹 ChatGPT replied: {reply_text}")
 
