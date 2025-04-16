@@ -1,15 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Voice AI Chat</title>
-</head>
-<body>
-  <h1>🎙️ Talk to Your AI</h1>
-  <button onclick="startRecording()">Speak</button>
-  <audio id="responseAudio"></audio>
-
- <script>
+<script>
   console.log("✅ JavaScript is running!");
 
   let stream = null;
@@ -19,9 +8,10 @@
   let analyser = null;
   let silenceTimer = null;
   let isPlaying = false;
+  let monitoring = false;
 
   async function startRecording() {
-    if (isPlaying) return; // don't start recording while AI is talking
+    if (isPlaying) return;
     console.log("🎧 Listening...");
 
     try {
@@ -32,6 +22,7 @@
       mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
 
       mediaRecorder.onstop = async () => {
+        monitoring = false;
         console.log("📤 Sending to backend...");
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
         const formData = new FormData();
@@ -66,7 +57,7 @@
   }
 
   function monitorSilence() {
-    if (audioContext) {
+    if (audioContext && audioContext.state !== "closed") {
       try { audioContext.close(); } catch (e) {}
     }
 
@@ -77,11 +68,18 @@
     source.connect(analyser);
 
     const data = new Uint8Array(analyser.fftSize);
+    monitoring = true;
 
     const check = () => {
-      if (!analyser) return;
+      if (!monitoring || !analyser) return;
 
-      analyser.getByteTimeDomainData(data);
+      try {
+        analyser.getByteTimeDomainData(data);
+      } catch (err) {
+        console.warn("⛔ Tried reading closed AudioContext");
+        return;
+      }
+
       let max = 0;
       for (let i = 0; i < data.length; i++) {
         const deviation = Math.abs(data[i] - 128);
@@ -119,6 +117,7 @@
   }
 
   function cleanup() {
+    monitoring = false;
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
       stream = null;
@@ -134,10 +133,3 @@
     silenceTimer = null;
   }
 </script>
-
-<script>
-  console.log("✅ index.html loaded and script is running");
-</script>
-
-</body>
-</html>
