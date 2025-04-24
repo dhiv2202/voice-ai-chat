@@ -70,35 +70,36 @@
     const data = new Uint8Array(analyser.fftSize);
     monitoring = true;
 
-    const check = () => {
-      if (!monitoring || !analyser) return;
+const check = () => {
+  if (!monitoring || !analyser || isPlaying) return; // 🛑 Don't check if AI is speaking
 
-      try {
-        analyser.getByteTimeDomainData(data);
-      } catch (err) {
-        console.warn("⛔ Tried reading closed AudioContext");
-        return;
-      }
+  try {
+    analyser.getByteTimeDomainData(data);
+  } catch (err) {
+    console.warn("⛔ Tried reading closed AudioContext");
+    return;
+  }
 
-      let max = 0;
-      for (let i = 0; i < data.length; i++) {
-        const deviation = Math.abs(data[i] - 128);
-        if (deviation > max) max = deviation;
-      }
+  let max = 0;
+  for (let i = 0; i < data.length; i++) {
+    const deviation = Math.abs(data[i] - 128);
+    if (deviation > max) max = deviation;
+  }
 
-      if (max < 10) {
-        if (!silenceTimer) {
-          silenceTimer = setTimeout(() => {
-            stopRecording();
-          }, 1000);
-        }
-      } else {
-        clearTimeout(silenceTimer);
-        silenceTimer = null;
-      }
+  if (max < 10) {
+    if (!silenceTimer) {
+      silenceTimer = setTimeout(() => {
+        stopRecording();
+      }, 1000);
+    }
+  } else {
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
+  }
 
-      requestAnimationFrame(check);
-    };
+  requestAnimationFrame(check);
+};
+
 
     check();
   }
