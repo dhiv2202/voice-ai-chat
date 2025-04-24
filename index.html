@@ -9,6 +9,7 @@
   let silenceTimer = null;
   let isPlaying = false;
   let monitoring = false;
+  let animationId = null;
 
   async function startRecording() {
     if (isPlaying) return;
@@ -23,6 +24,7 @@
 
       mediaRecorder.onstop = async () => {
         monitoring = false;
+        cancelAnimationFrame(animationId); // 💡 stop the loop
         console.log("📤 Sending to backend...");
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
         const formData = new FormData();
@@ -70,36 +72,35 @@
     const data = new Uint8Array(analyser.fftSize);
     monitoring = true;
 
-const check = () => {
-  if (!monitoring || !analyser || isPlaying) return; // 🛑 Don't check if AI is speaking
+    const check = () => {
+      if (!monitoring || !analyser || isPlaying) return;
 
-  try {
-    analyser.getByteTimeDomainData(data);
-  } catch (err) {
-    console.warn("⛔ Tried reading closed AudioContext");
-    return;
-  }
+      try {
+        analyser.getByteTimeDomainData(data);
+      } catch (err) {
+        console.warn("⛔ Tried reading closed AudioContext");
+        return;
+      }
 
-  let max = 0;
-  for (let i = 0; i < data.length; i++) {
-    const deviation = Math.abs(data[i] - 128);
-    if (deviation > max) max = deviation;
-  }
+      let max = 0;
+      for (let i = 0; i < data.length; i++) {
+        const deviation = Math.abs(data[i] - 128);
+        if (deviation > max) max = deviation;
+      }
 
-  if (max < 10) {
-    if (!silenceTimer) {
-      silenceTimer = setTimeout(() => {
-        stopRecording();
-      }, 1000);
-    }
-  } else {
-    clearTimeout(silenceTimer);
-    silenceTimer = null;
-  }
+      if (max < 10) {
+        if (!silenceTimer) {
+          silenceTimer = setTimeout(() => {
+            stopRecording();
+          }, 1000);
+        }
+      } else {
+        clearTimeout(silenceTimer);
+        silenceTimer = null;
+      }
 
-  requestAnimationFrame(check);
-};
-
+      animationId = requestAnimationFrame(check);
+    };
 
     check();
   }
@@ -110,6 +111,7 @@ const check = () => {
       mediaRecorder.stop();
     }
 
+    cancelAnimationFrame(animationId); // 💡 stop silence loop
     if (audioContext && audioContext.state !== "closed") {
       try {
         audioContext.close();
@@ -119,6 +121,7 @@ const check = () => {
 
   function cleanup() {
     monitoring = false;
+    cancelAnimationFrame(animationId); // 💡 stop silence loop again for safety
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
       stream = null;
