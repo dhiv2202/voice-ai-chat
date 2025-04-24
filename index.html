@@ -24,7 +24,7 @@
 
       mediaRecorder.onstop = async () => {
         monitoring = false;
-        cancelAnimationFrame(animationId); // 💡 stop the loop
+        cancelAnimationFrame(animationId);
         console.log("📤 Sending to backend...");
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
         const formData = new FormData();
@@ -59,8 +59,12 @@
   }
 
   function monitorSilence() {
-    if (audioContext && audioContext.state !== "closed") {
-      try { audioContext.close(); } catch (e) {}
+    if (audioContext && audioContext.state === "running") {
+      try {
+        audioContext.close();
+      } catch (e) {
+        console.warn("Error closing previous audioContext:", e);
+      }
     }
 
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -73,12 +77,12 @@
     monitoring = true;
 
     const check = () => {
-      if (!monitoring || !analyser || isPlaying) return;
+      if (!monitoring || !analyser || isPlaying || !audioContext || audioContext.state !== "running") return;
 
       try {
         analyser.getByteTimeDomainData(data);
       } catch (err) {
-        console.warn("⛔ Tried reading closed AudioContext");
+        console.warn("⛔ Tried reading analyser after context closed:", err);
         return;
       }
 
@@ -111,25 +115,30 @@
       mediaRecorder.stop();
     }
 
-    cancelAnimationFrame(animationId); // 💡 stop silence loop
-    if (audioContext && audioContext.state !== "closed") {
+    cancelAnimationFrame(animationId);
+
+    if (audioContext && audioContext.state === "running") {
       try {
         audioContext.close();
-      } catch (e) {}
+      } catch (e) {
+        console.warn("Error closing audioContext:", e);
+      }
     }
   }
 
   function cleanup() {
     monitoring = false;
-    cancelAnimationFrame(animationId); // 💡 stop silence loop again for safety
+    cancelAnimationFrame(animationId);
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
       stream = null;
     }
-    if (audioContext && audioContext.state !== "closed") {
+    if (audioContext && audioContext.state === "running") {
       try {
         audioContext.close();
-      } catch (e) {}
+      } catch (e) {
+        console.warn("Error closing audioContext:", e);
+      }
     }
     audioContext = null;
     mediaRecorder = null;
