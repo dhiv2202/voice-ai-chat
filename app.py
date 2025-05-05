@@ -40,7 +40,7 @@ def transcribe_audio():
         chat_history.append({"role": "user", "content": user_input})
 
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4-turbo",
             messages=chat_history
         )
 
