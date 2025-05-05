@@ -66,7 +66,7 @@
         mediaRecorder.start();
         setTimeout(() => {
           monitorSilence();
-        }, 1000); // Delay monitoring to give you time to speak
+        }, 1000); // Give 1s buffer before checking for silence
 
       } catch (err) {
         console.error("Mic access failed:", err);
@@ -93,7 +93,14 @@
       let silenceFrames = 0;
 
       const check = () => {
-        if (isPlaying || !monitoring || !analyser || !audioContext || audioContext.state !== "running") {
+        if (
+          isPlaying ||
+          !monitoring ||
+          !analyser ||
+          !audioContext ||
+          audioContext.state !== "running" ||
+          mediaRecorder?.state !== "recording"
+        ) {
           cancelAnimationFrame(animationId);
           return;
         }
@@ -111,6 +118,8 @@
           const deviation = Math.abs(data[i] - 128);
           if (deviation > max) max = deviation;
         }
+
+        console.log("🔍 Silence monitor running — user has spoken?", hasUserSpoken, " | max:", max);
 
         if (max > 10) {
           hasUserSpoken = true;
