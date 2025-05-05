@@ -21,6 +21,7 @@
     let isPlaying = false;
     let monitoring = false;
     let animationId = null;
+    let hasUserSpoken = false;
 
     async function startRecording() {
       if (isPlaying) return;
@@ -30,6 +31,7 @@
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream);
         audioChunks = [];
+        hasUserSpoken = false;
 
         mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
 
@@ -61,11 +63,10 @@
           audio.play();
         };
 
-     mediaRecorder.start();
-setTimeout(() => {
-  monitorSilence();
-}, 1500);
-
+        mediaRecorder.start();
+        setTimeout(() => {
+          monitorSilence();
+        }, 1000); // Delay monitoring to give you time to speak
 
       } catch (err) {
         console.error("Mic access failed:", err);
@@ -89,6 +90,7 @@ setTimeout(() => {
 
       const data = new Uint8Array(analyser.fftSize);
       monitoring = true;
+      let silenceFrames = 0;
 
       const check = () => {
         if (isPlaying || !monitoring || !analyser || !audioContext || audioContext.state !== "running") {
@@ -110,41 +112,18 @@ setTimeout(() => {
           if (deviation > max) max = deviation;
         }
 
-let silenceFrames = 0;
-
-const check = () => {
-  if (isPlaying || !monitoring || !analyser || !audioContext || audioContext.state !== "running") {
-    cancelAnimationFrame(animationId);
-    return;
-  }
-
-  try {
-    analyser.getByteTimeDomainData(data);
-  } catch (err) {
-    console.warn("⛔ Tried reading from analyser after cleanup:", err);
-    cancelAnimationFrame(animationId);
-    return;
-  }
-
-  let max = 0;
-  for (let i = 0; i < data.length; i++) {
-    const deviation = Math.abs(data[i] - 128);
-    if (deviation > max) max = deviation;
-  }
-
-  if (max < 10) {
-    silenceFrames++;
-    if (silenceFrames > 30) {
-      stopRecording();
-      return;
-    }
-  } else {
-    silenceFrames = 0;
-  }
-
-  animationId = requestAnimationFrame(check);
-};
-
+        if (max > 10) {
+          hasUserSpoken = true;
+          silenceFrames = 0;
+        } else {
+          if (hasUserSpoken) {
+            silenceFrames++;
+            if (silenceFrames > 30) {
+              stopRecording();
+              return;
+            }
+          }
+        }
 
         animationId = requestAnimationFrame(check);
       };
@@ -191,6 +170,7 @@ const check = () => {
       analyser = null;
       mediaRecorder = null;
       silenceTimer = null;
+      hasUserSpoken = false;
     }
   </script>
 </body>
