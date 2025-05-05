@@ -1,148 +1,165 @@
-<script>
-  console.log("✅ JavaScript is running!");
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Voice AI Chat</title>
+</head>
+<body>
+  <h1>🎙️ Talk to Your AI</h1>
+  <button onclick="startRecording()">Speak</button>
+  <audio id="responseAudio"></audio>
 
-  let stream = null;
-  let mediaRecorder = null;
-  let audioChunks = [];
-  let audioContext = null;
-  let analyser = null;
-  let silenceTimer = null;
-  let isPlaying = false;
-  let monitoring = false;
-  let animationId = null;
+  <script>
+    console.log("✅ JavaScript is running!");
 
-  async function startRecording() {
-    if (isPlaying) return;
-    console.log("🎧 Listening...");
+    let stream = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let audioContext = null;
+    let analyser = null;
+    let silenceTimer = null;
+    let isPlaying = false;
+    let monitoring = false;
+    let animationId = null;
 
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
-      audioChunks = [];
+    async function startRecording() {
+      if (isPlaying) return;
+      console.log("🎧 Listening...");
 
-      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
 
-      mediaRecorder.onstop = async () => {
-        monitoring = false;
-        cancelAnimationFrame(animationId);
-        console.log("📤 Sending to backend...");
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        const formData = new FormData();
-        formData.append("audio", audioBlob, "recording.webm");
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
 
-        const response = await fetch("/transcribe", {
-          method: "POST",
-          body: formData
-        });
+        mediaRecorder.onstop = async () => {
+          monitoring = false;
+          cancelAnimationFrame(animationId);
+          console.log("📤 Sending to backend...");
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          const formData = new FormData();
+          formData.append("audio", audioBlob, "recording.webm");
 
-        const audio = document.getElementById("responseAudio");
-        const audioBlobResp = await response.blob();
-        audio.src = URL.createObjectURL(audioBlobResp);
+          const response = await fetch("/transcribe", {
+            method: "POST",
+            body: formData
+          });
 
-        isPlaying = true;
-        audio.onended = () => {
-          console.log("🔁 AI done speaking — restarting mic...");
-          isPlaying = false;
-          cleanup();
-          startRecording();
+          const audio = document.getElementById("responseAudio");
+          const audioBlobResp = await response.blob();
+          audio.src = URL.createObjectURL(audioBlobResp);
+
+          isPlaying = true;
+          audio.onended = () => {
+            console.log("🔁 AI done speaking — restarting mic...");
+            isPlaying = false;
+            cleanup();
+            startRecording();
+          };
+
+          audio.play();
         };
 
-        audio.play();
+        mediaRecorder.start();
+        monitorSilence();
+
+      } catch (err) {
+        console.error("Mic access failed:", err);
+      }
+    }
+
+    function monitorSilence() {
+      if (audioContext && audioContext.state === "running") {
+        try {
+          audioContext.close();
+        } catch (e) {
+          console.warn("Error closing previous audioContext:", e);
+        }
+      }
+
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+
+      const data = new Uint8Array(analyser.fftSize);
+      monitoring = true;
+
+      const check = () => {
+        if (!monitoring || !analyser || isPlaying || !audioContext || audioContext.state !== "running") return;
+
+        try {
+          analyser.getByteTimeDomainData(data);
+        } catch (err) {
+          console.warn("⛔ Tried reading from analyser after cleanup:", err);
+          return;
+        }
+
+        let max = 0;
+        for (let i = 0; i < data.length; i++) {
+          const deviation = Math.abs(data[i] - 128);
+          if (deviation > max) max = deviation;
+        }
+
+        if (max < 10) {
+          if (!silenceTimer) {
+            silenceTimer = setTimeout(() => {
+              stopRecording();
+            }, 1000);
+          }
+        } else {
+          clearTimeout(silenceTimer);
+          silenceTimer = null;
+        }
+
+        animationId = requestAnimationFrame(check);
       };
 
-      mediaRecorder.start();
-      monitorSilence();
-
-    } catch (err) {
-      console.error("Mic access failed:", err);
-    }
-  }
-
-  function monitorSilence() {
-    if (audioContext && audioContext.state === "running") {
-      try {
-        audioContext.close();
-      } catch (e) {
-        console.warn("Error closing previous audioContext:", e);
-      }
+      check();
     }
 
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const source = audioContext.createMediaStreamSource(stream);
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 2048;
-    source.connect(analyser);
-
-    const data = new Uint8Array(analyser.fftSize);
-    monitoring = true;
-
-    const check = () => {
-      if (!monitoring || !analyser || isPlaying || !audioContext || audioContext.state !== "running") return;
-
-      try {
-        analyser.getByteTimeDomainData(data);
-      } catch (err) {
-        console.warn("⛔ Tried reading analyser after context closed:", err);
-        return;
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        console.log("🛑 Stopping recording...");
+        mediaRecorder.stop();
       }
 
-      let max = 0;
-      for (let i = 0; i < data.length; i++) {
-        const deviation = Math.abs(data[i] - 128);
-        if (deviation > max) max = deviation;
-      }
+      cancelAnimationFrame(animationId);
+      monitoring = false;
 
-      if (max < 10) {
-        if (!silenceTimer) {
-          silenceTimer = setTimeout(() => {
-            stopRecording();
-          }, 1000);
+      if (audioContext && audioContext.state === "running") {
+        try {
+          audioContext.close();
+        } catch (e) {
+          console.warn("Error closing audioContext:", e);
         }
-      } else {
-        clearTimeout(silenceTimer);
-        silenceTimer = null;
-      }
-
-      animationId = requestAnimationFrame(check);
-    };
-
-    check();
-  }
-
-  function stopRecording() {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      console.log("🛑 Stopping recording...");
-      mediaRecorder.stop();
-    }
-
-    cancelAnimationFrame(animationId);
-
-    if (audioContext && audioContext.state === "running") {
-      try {
-        audioContext.close();
-      } catch (e) {
-        console.warn("Error closing audioContext:", e);
       }
     }
-  }
 
-  function cleanup() {
-    monitoring = false;
-    cancelAnimationFrame(animationId);
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      stream = null;
-    }
-    if (audioContext && audioContext.state === "running") {
-      try {
-        audioContext.close();
-      } catch (e) {
-        console.warn("Error closing audioContext:", e);
+    function cleanup() {
+      cancelAnimationFrame(animationId);
+      monitoring = false;
+
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
       }
+
+      if (audioContext && audioContext.state === "running") {
+        try {
+          audioContext.close();
+        } catch (e) {
+          console.warn("Error closing audioContext during cleanup:", e);
+        }
+      }
+
+      audioContext = null;
+      analyser = null;
+      mediaRecorder = null;
+      silenceTimer = null;
     }
-    audioContext = null;
-    mediaRecorder = null;
-    analyser = null;
-    silenceTimer = null;
-  }
-</script>
+  </script>
+</body>
+</html>
