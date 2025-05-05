@@ -71,7 +71,7 @@
         mediaRecorder.start();
         setTimeout(() => {
           monitorSilence();
-        }, 1500); // Delay before monitoring starts
+        }, 1500); // Buffer before checking silence
 
       } catch (err) {
         console.error("Mic access failed:", err);
@@ -132,10 +132,13 @@
           }
           silenceFrames = 0;
         } else {
-          const elapsed = Date.now() - recordStartTime;
-          if (hasUserSpoken && elapsed > 6000) {  // minimum 6s total time
+          const now = Date.now();
+          const speechDuration = hasUserSpoken ? now - speechStartTime : 0;
+          const totalElapsed = now - recordStartTime;
+
+          if (hasUserSpoken && speechDuration > 3000 && totalElapsed > 6000) {
             silenceFrames++;
-            if (silenceFrames > 60) {
+            if (silenceFrames > 100) { // ~6-7 seconds of actual silence
               stopRecording();
               return;
             }
