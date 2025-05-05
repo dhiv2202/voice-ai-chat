@@ -4,11 +4,15 @@ import requests
 import os
 from io import BytesIO
 
-
 app = Flask(__name__)
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+
+# 🔹 Persistent conversation history (global for now)
+chat_history = [
+    {"role": "system", "content": "You are a helpful assistant. Always respond in English, no matter what language the user speaks."}
+]
 
 @app.route("/")
 def index():
@@ -26,27 +30,37 @@ def transcribe_audio():
             f.write(audio_bytes)
         print("🔹 Saved temp_audio.webm")
 
+        # 🔹 Transcribe with Whisper
         with open(temp_path, "rb") as f:
             transcript = openai.Audio.transcribe("whisper-1", f)
-        print(f"🔹 Transcription: {transcript['text']}")
+        user_input = transcript["text"]
+        print(f"🔹 Transcription: {user_input}")
+
+        # 🔹 Update chat history and send to GPT
+        chat_history.append({"role": "user", "content": user_input})
 
         response = openai.ChatCompletion.create(
-    model="gpt-3.5-turbo",
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant. Always respond in English, no matter what language the user speaks."},
-        {"role": "user", "content": transcript["text"]}
-    ]
-)
+            model="gpt-3.5-turbo",
+            messages=chat_history
+        )
 
         reply_text = response["choices"][0]["message"]["content"]
         print(f"🔹 ChatGPT replied: {reply_text}")
 
+        # 🔹 Add assistant's response to chat history
+        chat_history.append({"role": "assistant", "content": reply_text})
+
+        # 🔹 Optional: trim history to avoid token overflow
+        if len(chat_history) > 20:
+            chat_history[:] = [chat_history[0]] + chat_history[-18:]  # keep system + 9 rounds
+
+        # 🔹 Send to ElevenLabs
         headers = {
             "xi-api-key": ELEVENLABS_API_KEY,
             "Content-Type": "application/json"
         }
 
-        voice_id = "IKne3meq5aSn9XLyUdCD"
+        voice_id = "IKne3meq5aSn9XLyUdCD"  # Your selected ElevenLabs voice
         tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
 
         tts_response = requests.post(tts_url, headers=headers, json={
