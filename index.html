@@ -107,16 +107,41 @@
           if (deviation > max) max = deviation;
         }
 
-        if (max < 10) {
-          if (!silenceTimer) {
-            silenceTimer = setTimeout(() => {
-              if (!isPlaying) stopRecording();
-            }, 2500);
-          }
-        } else {
-          clearTimeout(silenceTimer);
-          silenceTimer = null;
-        }
+let silenceFrames = 0;
+
+const check = () => {
+  if (isPlaying || !monitoring || !analyser || !audioContext || audioContext.state !== "running") {
+    cancelAnimationFrame(animationId);
+    return;
+  }
+
+  try {
+    analyser.getByteTimeDomainData(data);
+  } catch (err) {
+    console.warn("⛔ Tried reading from analyser after cleanup:", err);
+    cancelAnimationFrame(animationId);
+    return;
+  }
+
+  let max = 0;
+  for (let i = 0; i < data.length; i++) {
+    const deviation = Math.abs(data[i] - 128);
+    if (deviation > max) max = deviation;
+  }
+
+  if (max < 10) {
+    silenceFrames++;
+    if (silenceFrames > 30) {
+      stopRecording();
+      return;
+    }
+  } else {
+    silenceFrames = 0;
+  }
+
+  animationId = requestAnimationFrame(check);
+};
+
 
         animationId = requestAnimationFrame(check);
       };
