@@ -61,8 +61,11 @@
           audio.play();
         };
 
-        mediaRecorder.start();
-        monitorSilence();
+     mediaRecorder.start();
+setTimeout(() => {
+  monitorSilence();
+}, 1500);
+
 
       } catch (err) {
         console.error("Mic access failed:", err);
