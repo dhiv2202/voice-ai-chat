@@ -51,8 +51,8 @@ def transcribe_audio():
         chat_history.append({"role": "assistant", "content": reply_text})
 
         # 🔹 Optional: trim history to avoid token overflow
-        if len(chat_history) > 20:
-            chat_history[:] = [chat_history[0]] + chat_history[-18:]  # keep system + 9 rounds
+        if len(chat_history) > 100:
+            chat_history[:] = [chat_history[0]] + chat_history[-98:]  # keep system + 9 rounds
 
         # 🔹 Send to ElevenLabs
         headers = {
