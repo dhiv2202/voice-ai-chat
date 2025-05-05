@@ -22,6 +22,8 @@
     let isPlaying = false;
     let hasUserSpoken = false;
     let speechStartTime = null;
+    let recordStartTime = null;
+    let recordingStopped = false;
 
     async function startRecording() {
       if (isPlaying) return;
@@ -33,6 +35,8 @@
         audioChunks = [];
         hasUserSpoken = false;
         speechStartTime = null;
+        recordingStopped = false;
+        recordStartTime = Date.now();
 
         mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
 
@@ -67,7 +71,7 @@
         mediaRecorder.start();
         setTimeout(() => {
           monitorSilence();
-        }, 1500); // Let user start speaking
+        }, 1500); // Delay before monitoring starts
 
       } catch (err) {
         console.error("Mic access failed:", err);
@@ -124,21 +128,19 @@
           if (!hasUserSpoken) {
             hasUserSpoken = true;
             speechStartTime = Date.now();
+            console.log("🗣️ User started speaking");
           }
           silenceFrames = 0;
         } else {
-          if (hasUserSpoken) {
-            const elapsedSpeech = Date.now() - speechStartTime;
-            if (elapsedSpeech < 3000) {
-              // Don't allow silence to trigger stop yet
-              silenceFrames = 0;
-            } else {
-              silenceFrames++;
-              if (silenceFrames > 60) { // 60 frames = ~4-5 seconds
-                stopRecording();
-                return;
-              }
+          const elapsed = Date.now() - recordStartTime;
+          if (hasUserSpoken && elapsed > 6000) {  // minimum 6s total time
+            silenceFrames++;
+            if (silenceFrames > 60) {
+              stopRecording();
+              return;
             }
+          } else {
+            silenceFrames = 0;
           }
         }
 
@@ -149,9 +151,15 @@
     }
 
     function stopRecording() {
+      if (recordingStopped) {
+        console.warn("⚠️ stopRecording called again — skipping.");
+        return;
+      }
+
       if (mediaRecorder && mediaRecorder.state !== "inactive") {
         console.log("🛑 Stopping recording...");
         mediaRecorder.stop();
+        recordingStopped = true;
       }
 
       cancelAnimationFrame(animationId);
@@ -188,6 +196,8 @@
       mediaRecorder = null;
       hasUserSpoken = false;
       speechStartTime = null;
+      recordStartTime = null;
+      recordingStopped = false;
     }
   </script>
 </body>
