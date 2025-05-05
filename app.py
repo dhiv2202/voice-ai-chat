@@ -39,6 +39,8 @@ def transcribe_audio():
         # 🔹 Update chat history and send to GPT
         chat_history.append({"role": "user", "content": user_input})
 
+        print(f"🧠 Chat history contains {len(chat_history)} messages")
+        
         response = openai.ChatCompletion.create(
             model="gpt-4-turbo",
             messages=chat_history
